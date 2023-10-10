@@ -18,7 +18,7 @@
         "createDefaultProgram": true,
         "project": "./tsconfig.json"
     },
-    "ignorePatterns": ["public/imgs/header/index.js"],
+    "ignorePatterns": ["public/imgs/header/index.js", "openApiGenerator/generated"],
     "rules": {
         "no-console": "warn",
         "no-debugger": "warn",
