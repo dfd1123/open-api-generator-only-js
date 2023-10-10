@@ -2,8 +2,6 @@
 
 ## Open Api Generator With JS
 
----
-
 
 ### How to use OpenApiGenerator developed with Vanilla JS
 
