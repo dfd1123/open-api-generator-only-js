@@ -33,11 +33,13 @@ class ApiGenerator {
 
   generate = async () => {
     const apiDir = generatorConfig?.generateDir ?? '';
-    const name = `${_upperFirst(this.#type)}Api`;
+    const name = `${this.#type}-api`;
+    const className = `${_upperFirst(this.#type)}Api`;
     const docs = await this.#getApiDocs();
     const generic = { name: 'Config', extends: 'AxiosRequestConfig', defaultType: 'AxiosRequestConfig' };
-    this.#append('/* eslint-disable @typescript-eslint/no-empty-interface */');
-    this.#append('/* eslint-disable no-multiple-empty-lines */');
+
+    // this.#append('/* eslint-disable @typescript-eslint/no-empty-interface */');
+    // this.#append('/* eslint-disable no-multiple-empty-lines */');
 
     this.#appendImports([
       { name: '{ AxiosRequestConfig, AxiosInstance }', path: 'axios' },
@@ -51,15 +53,15 @@ class ApiGenerator {
     _each(this.#schemas, this.#appendSchema);
 
     this.#defineClass({
-      name,
-      generic: '<Config extends AxiosRequestConfig = AxiosRequestConfig, Axios extends AxiosInstance = AxiosInstance>',
-      constructor: 'constructor(private readonly api: Axios) {}',
+      name: className,
+      generic: '<Axios extends AxiosInstance = AxiosInstance, Config extends AxiosRequestConfig = AxiosRequestConfig>',
+      constructor: 'constructor(public readonly api: Axios) {}',
       methods: this.#getMethods(),
     });
 
     await fs.promises.mkdir(apiDir, { recursive: true });
     fs.promises.writeFile(`${apiDir}/${name}.ts`, this.#print, { flag: 'w' })
-      .then(() => console.log(`[${name}] is built`))
+      .then(() => console.log(`✨[${name}] is built`))
       .catch(console.error);
   };
 
@@ -91,11 +93,14 @@ class ApiGenerator {
     this.#append(`\nexport default class ${name}${generic} {${_constructor}${methods}\n}`);
   };
 
-  #getMethods = () => this.#methods.reduce((acc, method) => {
+  #getMethods = () => this.#methods.reduce((acc, method, index) => {
     const quote = method.hasPathVar ? '`' : '\'';
     if (!method.name) {
-      const pathName = method.path.split('/').map((s, idx) => (idx > 0 ? _upperFirst(s) : s)).join('');
-      method.name = `${pathName || 'root'}${_upperFirst(method.method)}`;
+      if (method.summary && (/^[a-zA-Z]*$/).test(method.summary) && this.#methods.every(m => m.name !== _camelCase(method.summary))) method.name = method.summary;
+      else {
+        const pathName = method.path.split('/').map((s, idx) => (idx > 0 ? _upperFirst(s) : s)).join('');
+        method.name = `${pathName || 'root'}${_upperFirst(method.method)}`;
+      }
     }
     const methodName = _camelCase(method.name.replace(/^v\d+/, ''));
     acc += '\n';
@@ -117,7 +122,7 @@ class ApiGenerator {
     // }
 
     acc += `\n  ${methodName}(${method.params.map(p => `${p.name}: ${p.type}`).join(', ')}) {`;
-    acc += `\n    return this.api.${method.method}<${method.response}>(${quote}${method.path}${quote}${method.requestParam ? `, ${method.requestParam}` : ''}${['get', 'put', 'delete'].includes(method.method) ? '' : ', config'});`;
+    acc += `\n    return this.api.${method.method}<${method.response}${(generatorConfig.directResponseTypes || []).includes(this.#type) ? `, ${method.response}` : ''}>(${quote}${method.path}${quote}${method.requestParam ? `, ${method.requestParam}` : ''}${['get', 'put', 'delete'].includes(method.method) ? '' : ', config'});`;
     acc += '\n  }';
 
     return acc;
@@ -147,6 +152,19 @@ class ApiGenerator {
     return `${type}[]`;
   };
 
+  /**
+   * @param {DtoComponent} schema
+   * @param {string} key
+   */
+  #getObject = (p, k) => {
+    const type = Object.entries(p).reduce((acc, [key, value], index) => {
+      acc += `${p.required?.includes(key) ? key : `${key}?`}: ${p.required?.includes(key) ? this.#getType(value, key, k) : `${this.#getType(value, key, k)} | null`}`;
+      return acc;
+    }, '');
+
+    return `{ ${type} }`;
+  };
+
   #getEnum = (e, k, originKey) => {
     if (originKey) originKey = originKey[0].toUpperCase() + originKey.substring(1);
     let key = (originKey || '') + k[0].toUpperCase() + k.substring(1);
@@ -173,12 +191,16 @@ class ApiGenerator {
     }
     if (p.title) return p.title.replace(/[^a-zA-Z]/g, '');
     if (p.oneOf) return `(${p.oneOf.map(this.#getType).join(' | ')})`;
+    if (p.allOf) return this.#getType(p.allOf[0], k);
     if (p.type === 'array') return this.#getArray(p, k);
     if (p.enum) return this.#getEnum(p.enum, k, originKey);
     if (p.type === 'integer') return 'number';
     if (p.type === 'object') {
       if (p.additionalProperties?.type === 'string') return 'Record<string, string>';
-      if (p.additionalProperties === 'true') return 'Record<any, any>';
+      if (String(p.additionalProperties) === 'true') return 'Record<any, any>';
+      if (p.properties) {
+        return this.#getObject(p.properties, originKey);
+      }
     }
     return p.type;
   };
@@ -216,7 +238,7 @@ class ApiGenerator {
       ...p,
       name: p.name.split('.').reduce((acc, cur) => (acc ? acc + cur[0].toUpperCase() + cur.substring(1) : cur), ''),
     }));
-    const pa = params.map(param => `${param.name}${param.required ? '' : '?'}: ${this.#getType(param.schema, param.name, methodName)}`);
+    const pa = params.map(param => `${param.name}${param.required ? '' : '?'}: ${this.#getType(param.schema ?? param, param.name, methodName)}`);
     return [{ name: `{ ${params.map(it => it.name).join(', ')} }`, type: `{ ${pa.join(', ')} }${params.every(p => !p.required) ? ' = {}' : ''}`, queryParams: params.filter(it => it.in === 'query').map(it => it.name) }];
   };
 
@@ -230,8 +252,6 @@ class ApiGenerator {
 
   #parseRequestBody = requestBody => {
     if (!requestBody) return [];
-
-    if (!!requestBody.content && !requestBody.content['application/json']) console.log('awdadawdawd', requestBody);
 
     const type = this.#getType(requestBody.content ? requestBody.content['application/json'].schema : requestBody.schema);
     return [{ name: this.#parseName(type), type }];
