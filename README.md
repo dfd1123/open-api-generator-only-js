@@ -13,7 +13,7 @@ And then write the settings as shown below.
 module.exports = {
   generateDir: 'src/api/generated',
   type: {
-    basic: 'https://api-develop.granter.biz/v3/api-docs',
+    basic: 'https://raw.githubusercontent.com/OAI/OpenAPI-Specification/main/examples/v3.0/api-with-examples.json',
     // basic: proccess.env.BASIC_API_DOCS_URL,
   },
   directResponseTypes: ['basic']
