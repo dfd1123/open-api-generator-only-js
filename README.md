@@ -69,3 +69,12 @@ yarn generate-api
 ### Caution
 
 If you use prettier or eslint, be sure to exclude the directory where the generated result file is created from prettier and eslint.
+
+
+---
+
+### Original author for this development source
+
+
+
+https://github.com/oxizen
