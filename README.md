@@ -75,7 +75,7 @@ If you use prettier or eslint, be sure to exclude the directory where the genera
 
 ### Original author for this development source
 
-This development source is below
- We would like to inform you that this is the result of open API 2.0 version compatibility, configuration file application, and various bug fixes from the source created by the original author.
+The development source is as follows:
+ We would like to inform you that this is the result of Open API 2.0 version compatibility, application of the openApiGenerator.config.js configuration file, and various bug fixes in the source code written by the original author.
 
 https://github.com/oxizen
